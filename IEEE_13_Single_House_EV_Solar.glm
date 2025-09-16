@@ -1,0 +1,832 @@
+// This is the IEEE 13 node test feeder model set up to use the Newton-Raphson powerflow solver.
+
+// The feeder is created in the way that three phases are completely decoupled. So you only need to make changes to the load on a single phase. For simplicity, please use Phase A.
+
+// Each node of n1-n12 can be connected with multiple residential houses, EV chargers, EV charging stations, and solar panels. When you make changes to the load/generation
+// schedules, pleaase keep in mind that you are changing the AGGREGATED loads. For simplicity, we can assume each node is connected with 70-80 residential houses (each can have 
+// a Level-2 EV charger), 2-3 commercial buildings, and multiple EV charging stations (each with 10 Level-3 ports). For the number of EV charging stations and the areas of solar
+// panels on each building, you have to decide by yourselves.
+
+// Set runtime parameters
+// DO NOT CHANGE
+#set iteration_limit=100000;
+#set iteration_limit=100000;
+#set profiler=1;
+#set relax_naming_rules=1;
+
+
+// Set the simulation runtime period
+// Since the the most recent weather data does not have .tmy2 file, we have to use a historical data point
+// DO NOT CHANGE
+clock {
+	timezone EST+5EDT;
+	starttime '2017-07-01 00:00:00';
+	stoptime '2017-07-01 23:45:00';
+}
+
+// Initialize necessary Gridlab-D modules
+// DO NOT CHANGE
+module powerflow {
+	solver_method NR;
+	line_capacitance true;
+}
+module assert;
+module tape;
+module residential;
+module generators;
+module climate;
+
+// Create climate profile
+// Weather profile in Seattle is used here for example
+object climate {
+    name local_climate;
+    tmyfile "WA-Seattle.tmy2"; // Place the TMY file in the same folder; For Gridlab-D 5.3.0, .tmy2 file is the most stable format
+}
+
+
+//////////////////////////////////////////// DO NOT CHANGE BELOW //////////////////////////////////////////////////////////
+// Configure the Single-Phase IEEE-13 bus test feeder
+
+// Phase Conductor for 601: 556,500 26/7 ACSR
+object overhead_line_conductor {
+	name olc6010;
+	geometric_mean_radius 0.031300;
+	diameter 0.927 in;
+	resistance 0.185900;
+}
+
+// Phase Conductor for 602: 4/0 6/1 ACSR
+object overhead_line_conductor {
+	name olc6020;
+	geometric_mean_radius 0.00814;
+	diameter 0.563 in;
+	resistance 0.592000;
+}
+
+// Phase Conductor for 603, 604, 605: 1/0 ACSR
+object overhead_line_conductor {
+	name olc6030;
+	geometric_mean_radius 0.004460;
+	diameter 0.4 in;
+	resistance 1.120000;
+}
+
+// Overhead line configurations
+object line_spacing {
+	name ls500601;
+	distance_AB 2.5; //LR  - 500 - BACN
+	distance_AC 4.5; //LR
+	distance_BC 7; //LR
+	distance_BN 5.65685425; //LR
+	distance_AN 4.272002; //LR
+	distance_CN 5; //LR
+	distance_AE 28.0;
+	distance_BE 28.0;
+	distance_CE 28.0;
+	distance_NE 24.0;
+}
+
+// Overhead line configurations
+object line_spacing {
+	name ls500602;
+	distance_AC 2.5; //LR  - 500 - CABN
+	distance_AB 4.5; //LR
+	distance_BC 7; //LR
+	distance_CN 5.65685425; //LR
+	distance_AN 4.272002; //LR
+	distance_BN 5; //LR
+	distance_AE 28.0;
+	distance_BE 28.0;
+	distance_CE 28.0;
+	distance_NE 24.0;
+}
+
+object line_spacing {
+	name ls505603;
+	//distance_AB 2.5; //LR  - 505 CBN
+	distance_BC 7; //LR
+	//distance_AC 7; //LR
+	//distance_AN 5.65685425; //LR
+	distance_BN 5; //LR
+	distance_CN 5.65685425; //LR
+	//distance_AE 28.0;
+	distance_BE 28.0;
+	distance_CE 28.0;
+	distance_NE 24.0;
+}
+
+object line_spacing {
+	name ls505604;
+	//distance_AB 2.5; //LR  - 505 ACN
+	//distance_BC 4.5; //LR
+	distance_AC 7; //LR
+	distance_AN 5.65685425; //LR
+	//distance_BN 4.272002; //LR
+	distance_CN 5; //LR
+	distance_AE 28.0;
+	//distance_BE 28.0;
+	distance_CE 28.0;
+	distance_NE 24.0;
+}
+
+object line_spacing {
+	name ls510605;
+	//distance_AB 2.5; //LR  - 510 CN
+	//distance_BC 4.5; //LR
+	//distance_AC 7; //LR
+	//distance_AN 5.65685425; //LR
+	//distance_BN 4.272002; //LR
+	distance_CN 5; //LR
+	//distance_AE 28.0;
+	//distance_BE 28.0;
+	distance_CE 29.0;
+	distance_NE 24.0;
+}
+
+object line_configuration {
+	name lc601;
+	conductor_A olc6010;
+	conductor_B olc6010;
+	conductor_C olc6010;
+	conductor_N olc6020;
+	spacing ls500601;
+}
+
+object line_configuration {
+	name lc602;
+	conductor_A olc6020;
+	conductor_B olc6020;
+	conductor_C olc6020;
+	conductor_N olc6020;
+	spacing ls500602;
+}
+
+object line_configuration {
+	name lc603;
+	//conductor_A olc6030;
+	conductor_B olc6030;
+	conductor_C olc6030;
+	conductor_N olc6030;
+	spacing ls505603;
+}
+
+object line_configuration {
+	name lc604;
+	conductor_A olc6030;
+	//conductor_B olc6030;
+	conductor_C olc6030;
+	conductor_N olc6030;
+	spacing ls505604;
+}
+
+object line_configuration {
+	name lc605;
+	//conductor_A olc6030;
+	//conductor_B olc6030;
+	conductor_C olc6030;
+	conductor_N olc6030;
+	spacing ls510605;
+}
+
+object line_configuration {
+       name lc606;
+       z11 0.7982+0.4463j;
+       z12 0.3192+0.0328j; //LR change
+       z13 0.2849-0.0143j; //LR change
+       z21 0.3192+0.0328j; //LR change
+       z22 0.7891+0.4041j; //LR change
+       z23 0.3192+0.0328j; //LR change
+       z31 0.2849-0.0143j; //LR change
+       z32 0.3192+0.0328j; //LR change
+       z33 0.7982+0.4463j; //LR change
+}
+
+object line_configuration {
+       name lc607;
+       z11 1.3425+0.5124j;
+       z12 0.0+0.0j;
+       z13 0.0+0.0j;
+       z21 0.0+0.0j;
+       z22  0.0+0.0j; // 1.3425+0.5124j; //LR
+       z23 0.0+0.0j;
+       z31 0.0+0.0j;
+       z32 0.0+0.0j;
+       z33 0.0+0.0j; // 1.3425+0.5124j; //LR
+}
+
+// Define line objects
+
+object overhead_line {
+     phases "BACN";
+     name line_0-1;
+     from n0;
+     to n1;
+     length 2000; //yes
+     configuration lc601;
+}
+
+object overhead_line {
+     phases "BACN";
+     name line_1-2;
+     from n1;
+     to n2;
+     length 500;
+     configuration  lc601;  // LR  lc603;
+}
+
+object overhead_line {
+     phases "BACN";
+     name line_2-3;
+     from n2;
+     to n3;
+     length 300;
+     configuration lc601;  // LR lc603;
+}
+
+object overhead_line {
+     phases "BACN";
+     name line_1-4;
+     from n1;
+     to n4;
+     length 500;
+     configuration lc601;  // LR lc602;
+}
+
+object overhead_line {
+     phases "BACN";
+     name line_4-5;
+	 from n4;
+     to n5;
+     length 50; //LR change from 300
+     configuration lc601;  // LR lc603;
+}
+
+object overhead_line {
+     phases "BACN";
+     name line_1-6;
+    from n1;
+     to n6;
+     length 2000;
+     configuration lc601;
+}
+
+object overhead_line {
+     phases "BACN";
+     name line_6-7;
+    from n6;
+     to n7;
+     length 50;  //change from 300
+     configuration lc601;  // LR lc604;
+}
+
+object overhead_line { //LR  underground_line { //692675 {
+     phases "BACN";
+     name line_7-8;
+     from n7;
+     to n8;
+     length 500;
+     configuration lc601;  // LR lc606;
+}
+
+object overhead_line { 
+     phases "BACN";
+     name line_6-12;
+    from n6;
+     to n12;
+     length 1000;
+     configuration lc601;
+}
+
+object overhead_line {
+     phases "BACN";
+     name line_6-9;
+    from n6;
+     to n9;
+     length 300;
+     configuration lc601;  // LR lc604;
+}
+
+ object overhead_line { //684611 //{
+      phases "BACN";
+      name line_9-10;
+      from n9;
+      to n10;
+      length 300;
+      configuration lc601;  // LR lc605;
+}
+
+object  overhead_line { //LR          underground_line { //684652 {
+      phases "BACN";
+      name line_9-11;
+      from n9;
+      to n11;
+      length 800;
+      configuration lc601;  // LR lc607;
+}
+
+//////////////////////////////////////////// DO NOT CHANGE ABOVE //////////////////////////////////////////////////////////
+
+
+/////////////////////////////////////////// MAKE NECESSARY (LOAD) CHANGED BELOW /////////////////////////////////////////////////
+
+// Each node can be configured to add house load, EV charging load, and solar panel generation
+
+
+
+// Node n0 configuration
+// No house load, EV charging load, or solar is allowed on this node
+// DO NOT CHANGE node n0
+object node { //650 //{
+      name n0; // This is the feeder head; named as n0
+      phases "ABCN"; //"ABCN";
+      bustype SWING;
+      voltage_A 2401.7771;
+	  voltage_B -1200.8886-2080.0000i; //MX
+	  voltage_C -1200.8886+2080.0000i; //MX
+      nominal_voltage 2401.7771;
+}
+
+//////////////////// Node n1 configuration////////////////////////////////
+// You can attach any house load, EV charging load, and solar to this node
+// See n2 configuration for example
+object meter { //632 //{
+     name n1;
+     phases "ABCN";
+     nominal_voltage 2401.7771;     
+};
+//////////////////////////////////////////////////////////////////////////
+
+
+//////////////////// START of Node n2 configuration////////////////////////////////
+// You can attach any new house load, EV charging load, and solar to this node
+// Note: This network is created in the way that three phases are decoupled. So you only need to place the loads on Phase A and observe the grid behaviors on Phase A only.
+
+object meter {
+    name n2;
+    phases "ABCN";
+    nominal_voltage 2401.7771;
+}
+
+// Defines base load for node n2
+object load {
+    name n2_baseload;
+    parent n2;
+    phases A;
+    nominal_voltage 2401.7771;
+    constant_power_A 0; // The power schedule will be driven by the player defined below
+};
+object player {
+    parent n2_baseload;
+    property constant_power_A; // This places the base load to Phase A as a constant-power load
+    file "base_load.csv"; // This loads the file that specifies the base load schedule for the simulation period of interest
+};
+//object player {
+//    parent n2_baseload;
+//    property constant_power_B; // This places the base load to Phase B as a constant-power load
+//    file "base_load.csv"; // I used the same .csv file for all three phases for simplicity. You can change it to any schedule you generated.
+//};
+//object player {
+//    parent n2_baseload;
+//    property constant_power_C;// This places the base load to Phase B as a constant-power load
+//    file "base_load.csv"; // I used the same .csv file for all three phases for simplicity. You can change it to any schedule you generated.
+//};
+
+// Defines house load for node n2
+object load {
+    name n2_house_load_A;
+    parent n2;				// Connect to Node n2
+    phases A; 				// Connect to Phase A
+    nominal_voltage 2401.7771;
+    constant_power_A 0;		// The power schedule will be driven by the player defined below
+};
+
+object player {
+    parent n2_house_load_A; 			// The name indicates the load will only be placed on Phase A
+    property constant_power_A; 			// It defines the load type is constant-power load
+    file "house_load.csv"; 	// This loads the file that specifies the house load schedule for the simulation period of interest; This is a randomly generated schedule, you should replace it with the house load schedule you generated
+};
+
+// Defines EV load for node n2
+object load {
+    name n2_EV_load_A;		
+    parent n2;					// Connect to node n2
+    phases A;					// Only connect to Phase A
+    nominal_voltage 2401.7771;
+	constant_power_A 0;			// The power schedule will be driven by the player defined below
+};
+
+object player {
+    parent n2_EV_load_A; 				// The name indicates the load will only be placed on Phase A
+    property constant_power_A; 			// It defines the load type is constant-power load
+	file "EV_load.csv";			// This loads the file that specifies the house load schedule for the simulation period of interest; This is a randomly generated schedule, you should replace it with the house load schedule you generated
+};
+
+// Defines Solar PV and inverter connected at node n2
+// Only connect the solar to Phase A. You can make changes to the rated power of inverter and area of the solar panels.
+object inverter {
+    name solar_inverter_n2;
+    parent n2;                    			// Connect to node n2
+    phases A;					  			// Connect to Phase A
+    inverter_type FOUR_QUADRANT;  			// Standard definition for inverter type (Grid-following inverter) (No need to change)
+    generator_mode SUPPLY_DRIVEN; 			// Standard definition for generator mode (No need to change)
+    generator_status ONLINE;      			// Standard definition for generator status (No need to change)
+	four_quadrant_control_mode CONSTANT_PF; // Standard definition for 4-q control mode (NO need to change)
+    power_factor 1.0;						// Standard definition for power factor (NO need to change)
+    rated_power 100000000000;            	// Unit is W; It defines the rated (maximum) power output of the inverter used by the PV panels
+    inverter_efficiency 0.96;				// Efficiency of the inverter; Adjust as needed; normal range is 93% to 98%
+
+    object solar {
+        name solar_n2;
+		parent solar_inverter_n2;			// Connect to the inverter on node n2
+        panel_type SINGLE_CRYSTAL_SILICON;	// Defines the solar panel type (NO need to change)
+        efficiency 0.2;           			// Defines the solar panel efficiency. Normal range is 16%-22%; Adjust as needed
+        area 10000 m^2;                  	// Defines the total area of the solar panel. You can also use unit ft^2. This is just a random number; Adjust as needed.
+        orientation FIXED_AXIS;				// Defines the orientation of the solar panels. For most residential and commericial buildings, it is just fixed axis. (NO need to change)
+        tilt_angle 30;            			// Defines the tilt angle in degrees. (NO need to change)
+        orientation_azimuth 270; 			// Defines the azimuth orientation; equator-facing Sout; (NO need to change)             
+		SOLAR_TILT_MODEL SOLPOS;			// Standard definition (NO need to change)
+	    SOLAR_POWER_MODEL FLATPLATE;		// Standard definition (NO need to change)
+    };
+}
+
+// Configure the recorders for node n2 or objects connected to node n2, if you want to monitor some metric of this node
+
+// Defines a single recorder
+object recorder {
+    parent n2;								// The recorder is connected to node n2
+    property voltage_A.real,voltage_A.imag;	// The recorder is recording the real and imaginary voltages of Phase A @ node n2
+    file "test_out_n2.csv";					// The recorded data is stored to this file; If the file does not exist, Gridlab-D will create one; Remember to close the opened .csv file before running the simulation again. Otherwise the newly generated data won't be able to be written to the file.
+    interval 900;							// Time resolution; Unit is second; This indicates the voltage data are recorded every 900 seconds (15 minutes); Adjust as needed
+    limit 1000;								// Maximum number of data points; Ajust as needed
+};
+
+// Defines a group recorder that records multiple objects
+object group_recorder {						
+    group "class=load and parent=n2";		// Condition for the recording. This indicates any load connected at node n2
+    property constant_power_A;				// Records the constant power flow at Phase A of node n2
+	interval 900;  				    		// Record every 15 minutes
+    file "n2_local_load_A.csv";				// Saves the data to file
+}
+
+// Defines a single recorder
+object recorder {
+    parent solar_n2;			// Connect to solar_n2 (the solar panel defined above)
+    property P_Out;     		// Record the active power output in W
+    interval 900;      			// Record every 15 minutes
+    file "solar_n2_power.csv";	// Saves the data to file
+}
+//////////////////// END of Node n2 configuration////////////////////////////////
+
+
+ 
+//////////////////// START of Node n3 configuration////////////////////////////////
+object meter{
+     name n3;
+     phases "ABCN";
+     nominal_voltage 2401.7771;
+}
+
+// Defines base load for node n3
+object load {
+    name n3_baseload;
+    parent n3;
+    phases A;
+    nominal_voltage 2401.7771;
+    constant_power_A 0;
+};
+
+object player {
+    parent n3_baseload;
+    property constant_power_A; // This places the base load to Phase A as a constant-power load
+    file "base_load.csv"; // This loads the file that specifies the base load schedule for the simulation period of interest
+};
+
+
+// Define EV load (as needed)
+// Define new house load (as needed)
+// Define solar generation (as needed)
+// Define recorders (as needed)
+
+//////////////////// END of Node n3 configuration////////////////////////////////
+
+
+
+//////////////////// START of Node n4 configuration////////////////////////////////
+object meter{
+     name n4;
+     phases "ABCN";
+     nominal_voltage 2401.7771;
+}
+
+// Defines base load for node n4
+object load {
+    name n4_baseload;
+    parent n4;
+    phases A;
+    nominal_voltage 2401.7771;
+    constant_power_A 0;
+};
+
+object player {
+    parent n4_baseload;
+    property constant_power_A; // This places the base load to Phase A as a constant-power load
+    file "base_load.csv"; // This loads the file that specifies the base load schedule for the simulation period of interest
+};
+
+
+// Define EV load (as needed)
+// Define new house load (as needed)
+// Define solar generation (as needed)
+// Define recorders (as needed)
+
+//////////////////// END of Node n4 configuration////////////////////////////////
+
+
+//////////////////// START of Node n5 configuration////////////////////////////////
+object meter{
+     name n5;
+     phases "ABCN";
+     nominal_voltage 2401.7771;
+}
+
+// Defines base load for node n5
+object load {
+    name n5_baseload;
+    parent n5;
+    phases A;
+    nominal_voltage 2401.7771;
+    constant_power_A 0;
+};
+
+object player {
+    parent n5_baseload;
+    property constant_power_A; // This places the base load to Phase A as a constant-power load
+    file "base_load.csv"; // This loads the file that specifies the base load schedule for the simulation period of interest
+};
+
+
+// Define EV load (as needed)
+// Define new house load (as needed)
+// Define solar generation (as needed)
+// Define recorders (as needed)
+
+//////////////////// END of Node n5 configuration////////////////////////////////
+
+
+//////////////////// START of Node n6 configuration////////////////////////////////
+object meter{ //671
+     name n6;
+     phases "ABCN";
+     nominal_voltage 2401.7771;
+}
+
+// Defines base load for node n6
+object load {
+    name n6_baseload;
+    parent n6;
+    phases A;
+    nominal_voltage 2401.7771;
+    constant_power_A 0;
+};
+
+object player {
+    parent n6_baseload;
+    property constant_power_A; // This places the base load to Phase A as a constant-power load
+    file "base_load.csv"; // This loads the file that specifies the base load schedule for the simulation period of interest
+};
+
+
+// Define EV load (as needed)
+// Define new house load (as needed)
+// Define solar generation (as needed)
+// Define recorders (as needed)
+
+//////////////////// END of Node n6 configuration////////////////////////////////
+
+
+//////////////////// START of Node n7 configuration////////////////////////////////
+object meter{
+     name n7;
+     phases "ABCN";
+     nominal_voltage 2401.7771;
+}
+
+// Defines base load for node n7
+object load {
+    name n7_baseload;
+    parent n7;
+    phases A;
+    nominal_voltage 2401.7771;
+    constant_power_A 0;
+};
+
+object player {
+    parent n7_baseload;
+    property constant_power_A; // This places the base load to Phase A as a constant-power load
+    file "base_load.csv"; // This loads the file that specifies the base load schedule for the simulation period of interest
+};
+
+
+// Define EV load (as needed)
+// Define new house load (as needed)
+// Define solar generation (as needed)
+// Define recorders (as needed)
+
+//////////////////// END of Node n7 configuration////////////////////////////////
+
+
+//////////////////// START of Node n8 configuration////////////////////////////////
+object meter{ //645
+     name n8;
+     phases "ABCN";
+     nominal_voltage 2401.7771;
+}
+
+// Defines base load for node n8
+object load {
+    name n8_baseload;
+    parent n8;
+    phases A;
+    nominal_voltage 2401.7771;
+    constant_power_A 0;
+};
+
+object player {
+    parent n8_baseload;
+    property constant_power_A; // This places the base load to Phase A as a constant-power load
+    file "base_load.csv"; // This loads the file that specifies the base load schedule for the simulation period of interest
+};
+
+
+// Define EV load (as needed)
+// Define new house load (as needed)
+// Define solar generation (as needed)
+// Define recorders (as needed)
+
+//////////////////// END of Node n8 configuration////////////////////////////////
+
+ //////////////////// START of Node n9 configuration////////////////////////////////
+object meter{
+     name n9;
+     phases "ABCN";
+     nominal_voltage 2401.7771;
+}
+
+// Defines base load for node n9
+object load {
+    name n9_baseload;
+    parent n9;
+    phases A;
+    nominal_voltage 2401.7771;
+    constant_power_A 0;
+};
+
+object player {
+    parent n9_baseload;
+    property constant_power_A; // This places the base load to Phase A as a constant-power load
+    file "base_load.csv"; // This loads the file that specifies the base load schedule for the simulation period of interest
+};
+
+
+// Define EV load (as needed)
+// Define new house load (as needed)
+// Define solar generation (as needed)
+// Define recorders (as needed)
+
+//////////////////// END of Node n9 configuration////////////////////////////////
+
+
+//////////////////// START of Node n10 configuration////////////////////////////////
+object meter{
+     name n10;
+     phases "ABCN";
+     nominal_voltage 2401.7771;
+}
+
+// Defines base load for node n10
+object load {
+    name n10_baseload;
+    parent n10;
+    phases A;
+    nominal_voltage 2401.7771;
+    constant_power_A 0;
+};
+
+object player {
+    parent n10_baseload;
+    property constant_power_A; // This places the base load to Phase A as a constant-power load
+    file "base_load.csv"; // This loads the file that specifies the base load schedule for the simulation period of interest
+};
+
+
+// Define EV load (as needed)
+// Define new house load (as needed)
+// Define solar generation (as needed)
+// Define recorders (as needed)
+
+//////////////////// END of Node n10 configuration////////////////////////////////
+
+//////////////////// START of Node n11 configuration////////////////////////////////
+object meter{
+     name n11;
+     phases "ABCN";
+     nominal_voltage 2401.7771;
+}
+
+// Defines base load for node n3
+object load {
+    name n11_baseload;
+    parent n11;
+    phases A;
+    nominal_voltage 2401.7771;
+    constant_power_A 0;
+};
+
+object player {
+    parent n11_baseload;
+    property constant_power_A; // This places the base load to Phase A as a constant-power load
+    file "base_load.csv"; // This loads the file that specifies the base load schedule for the simulation period of interest
+};
+
+
+// Define EV load (as needed)
+// Define new house load (as needed)
+// Define solar generation (as needed)
+// Define recorders (as needed)
+
+//////////////////// END of Node n11 configuration////////////////////////////////
+
+//////////////////// START of Node n12 configuration////////////////////////////////
+object meter{
+     name n12;
+     phases "ABCN";
+     nominal_voltage 2401.7771;
+}
+
+// Defines base load for node n12
+object load {
+    name n12_baseload;
+    parent n12;
+    phases A;
+    nominal_voltage 2401.7771;
+    constant_power_A 0;
+};
+
+object player {
+    parent n12_baseload;
+    property constant_power_A; // This places the base load to Phase A as a constant-power load
+    file "base_load.csv"; // This loads the file that specifies the base load schedule for the simulation period of interest
+};
+
+
+// Define EV load (as needed)
+// Define new house load (as needed)
+// Define solar generation (as needed)
+// Define recorders (as needed)
+
+//////////////////// END of Node n12 configuration////////////////////////////////
+
+ 
+/////////////////// Define some overall recorders ///////////////////////////////
+
+// All nodal voltage data
+object voltdump {
+     filename Three_Phase_Voltage_Dump.csv;
+}
+
+// All nodal current data
+object currdump {
+    filename Three_Phase_Current_Dump.csv;
+}
+
+// Recording voltage magnitudes at all nodes on Phase A
+object group_recorder {
+	name voltage_mag_phase_A;
+	group "class=meter";
+	property voltage_A;
+	file "All_Nodes_Voltage_A_mag.csv";
+	interval 900;
+	limit 1000;
+	complex_part MAG;
+  }
+
+// Recording voltage angles at all nodes on Phase A
+  object group_recorder {
+	name voltage_ang_phase_A;
+  //   parent meter;
+	group "class=meter";
+	property voltage_A;
+	file "All_Nodes_Voltage_A_ang.csv";
+	interval 900;
+	limit 1000;
+	complex_part ANG_DEG;
+  }
+
+object recorder {
+	name climate_recorder;
+	parent local_climate;
+     file climate_data_out.csv;
+     interval 5;
+     property temperature, humidity, solar_direct, extraterrestrial_direct_normal;
+} 
+
