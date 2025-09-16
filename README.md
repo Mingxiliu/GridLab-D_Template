@@ -36,7 +36,7 @@ University of Utah, Salt Lake City, USA
    - Mac users: install **VMWare Fusion** to run Windows virtually.  
 2. Download installer from the [GridLab-D Releases](https://github.com/gridlab-d/gridlab-d/releases).  
 3. Install **GridLab-D v5.3.0** (use default paths).  
-4. Verify installation:
+4. Verify installation: In the command line tool, enter
    ```bash
    gridlabd --version
    ```
